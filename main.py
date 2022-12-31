@@ -5,8 +5,10 @@ import sys
 
 
 FPS = 30
-v = -60
-level = 3
+v_up = -60
+v_down = 20
+level = 2
+k_boards = 0
 clash = False
 pygame.init()
 size = width, height = 1000, 700
@@ -42,13 +44,13 @@ def start_screen():
                   "преждевременный выход - esc", "",
                   "нажмите Enter для старта"]
 
-    fon = pygame.transform.scale(load_image('вертолет.jpg'), size)
+    fon = pygame.transform.scale(load_image('город.webp'), size)
     screen.blit(fon, (0, 0))
 
     font = pygame.font.Font(None, 30)
     text_coord = 20
     for line in intro_text:
-        string_rendered = font.render(line, True, pygame.Color('white'))
+        string_rendered = font.render(line, True, pygame.Color('black'))
         intro_rect = string_rendered.get_rect()
         text_coord += 10
         intro_rect.top = text_coord
@@ -78,35 +80,36 @@ def sprite_helicopter():
 
 
 class Boards(pygame.sprite.Sprite):
-    image = load_image("стена.png")
+    image = load_image("стена.jpg")
     image = pygame.transform.scale(image, (100, height))
 
     def __init__(self, x, y, *group):
         super().__init__(*group)
-        self.image = Boards_down.image
+        self.image = BoardsDown.image
         self.mask = pygame.mask.from_surface(self.image)
         self.rect = self.image.get_rect()
         self.rect.x = width + x * ((width + 100) / 2)
         self.rect.y = y
 
 
-class Boards_down(Boards):
+class BoardsDown(Boards):
     def __init__(self, x, y, *group):
         super().__init__(x, y, *group)
 
     def update(self, y, sprite):
-        global clash
+        global clash, k_boards
         if self.rect.x > -150:
             self.rect.x -= level
         else:
             self.rect.x = width
             self.rect.y = y
+            k_boards += 1
 
         if pygame.sprite.collide_mask(self, sprite):
             clash = True
 
 
-class Boards_up(Boards):
+class BoardsUp(Boards):
 
     def __init__(self, x, y, *group):
         super().__init__(x, y, *group)
@@ -124,7 +127,9 @@ class Boards_up(Boards):
 
 
 def game_cycle():
+    global v_down
     sprite = sprite_helicopter()
+    font = pygame.font.Font(None, 50)
     screen2 = pygame.Surface(size)
     fon = pygame.transform.scale(load_image('небо'), size)
     screen2.blit(fon, (0, 0))
@@ -134,8 +139,8 @@ def game_cycle():
     boards_up = pygame.sprite.Group()
     for i in range(2):
         y = random.randrange(300, height - 100)
-        Boards_down(i, y, boards_down)
-        Boards_up(i, y - 950, boards_up)
+        BoardsDown(i, y, boards_down)
+        BoardsUp(i, y - 950, boards_up)
 
     while True:
         for event in pygame.event.get():
@@ -144,21 +149,53 @@ def game_cycle():
                 pygame.time.set_timer(time, 0)
                 terminate()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                sprite.rect = sprite.rect.move(0, v)
+                sprite.rect = sprite.rect.move(0, v_up)
+                v_down = 20
+
             if event.type == time:
-                y = random.randrange(300, height - 100)
+                y = random.randrange(300,  height - 100)
                 boards_down.update(y, sprite)
                 boards_up.update(y - 950, sprite)
-                if clash:
+                if clash or sprite.rect.y < -100 or sprite.rect.y > height:
                     return
-                sprite.rect = sprite.rect.move(0, 1)
+                sprite.rect = sprite.rect.move(0, v_down / 20)
+                v_down += 1
             screen2.blit(sprite.image, (sprite.rect.x, sprite.rect.y))
             boards_down.draw(screen2)
             boards_up.draw(screen2)
+            text = font.render(str(k_boards), True, (0, 255, 0))
+            screen2.blit(text, (10, 10))
             screen.blit(screen2, (0, 0))
             screen2.blit(fon, (0, 0))
 
             pygame.display.flip()
+
+
+def finish_screen():
+    intro_text = ["Конец", f"Счёт: {k_boards}", f"Рекорд: {0}"]
+
+    fon = pygame.transform.scale(load_image('город2.webp'), size)
+    screen.blit(fon, (0, 0))
+
+    font = pygame.font.Font(None, 30)
+    text_coord = 20
+    for line in intro_text:
+        string_rendered = font.render(line, True, pygame.Color('black'))
+        intro_rect = string_rendered.get_rect()
+        text_coord += 10
+        intro_rect.top = text_coord
+        intro_rect.x = 10
+        text_coord += intro_rect.height
+        screen.blit(string_rendered, intro_rect)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or \
+                    (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                terminate()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                return
+        pygame.display.flip()
 
 
 if __name__ == '__main__':
@@ -167,5 +204,5 @@ if __name__ == '__main__':
 
     start_screen()
     game_cycle()
-
+    finish_screen()
 
