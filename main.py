@@ -79,6 +79,11 @@ def sprite_helicopter():
     return sprite
 
 
+def boom():
+    global clash
+    clash = True
+
+
 class Boards(pygame.sprite.Sprite):
     image = load_image("стена.jpg")
     image = pygame.transform.scale(image, (100, height))
@@ -97,16 +102,18 @@ class BoardsDown(Boards):
         super().__init__(x, y, *group)
 
     def update(self, y, sprite):
-        global clash, k_boards
+        global k_boards, level
         if self.rect.x > -150:
             self.rect.x -= level
         else:
             self.rect.x = width
             self.rect.y = y
             k_boards += 1
+            if k_boards % 5 == 0:
+                level += 1
 
         if pygame.sprite.collide_mask(self, sprite):
-            clash = True
+            boom()
 
 
 class BoardsUp(Boards):
@@ -123,7 +130,7 @@ class BoardsUp(Boards):
             self.rect.y = y
 
         if pygame.sprite.collide_mask(self, sprite):
-            clash = True
+            boom()
 
 
 def game_cycle():
@@ -156,11 +163,15 @@ def game_cycle():
                 y = random.randrange(300,  height - 100)
                 boards_down.update(y, sprite)
                 boards_up.update(y - 950, sprite)
-                if clash or sprite.rect.y < -100 or sprite.rect.y > height:
+                if clash or -100 > sprite.rect.y or sprite.rect.y > height:
+                    boom_image = pygame.transform.scale(load_image('взрыв.png'), (400, 400))
+                    screen.blit(boom_image, (sprite.rect.x - 100, sprite.rect.y - 150))
+                    pygame.display.flip()
+                    pygame.time.wait(1500)
                     return
                 sprite.rect = sprite.rect.move(0, v_down / 20)
                 v_down += 1
-            screen2.blit(sprite.image, (sprite.rect.x, sprite.rect.y))
+            screen2.blit(sprite.image, sprite.rect)
             boards_down.draw(screen2)
             boards_up.draw(screen2)
             text = font.render(str(k_boards), True, (0, 255, 0))
