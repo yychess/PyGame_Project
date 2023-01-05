@@ -14,6 +14,7 @@ pygame.init()
 size = width, height = 1000, 700
 screen = pygame.display.set_mode(size)
 clock = pygame.time.Clock()
+record = 0
 
 
 def terminate():
@@ -134,7 +135,8 @@ class BoardsUp(Boards):
 
 
 def game_cycle():
-    global v_down
+    global v_down, record
+
     sprite = sprite_helicopter()
     font = pygame.font.Font(None, 50)
     screen2 = pygame.Surface(size)
@@ -144,6 +146,14 @@ def game_cycle():
     pygame.time.set_timer(time, 10)
     boards_down = pygame.sprite.Group()
     boards_up = pygame.sprite.Group()
+
+    try:
+        file = open("data/record.txt", "r")
+        record = int(file.read())
+        file.close()
+    except FileNotFoundError:
+        record = 0
+
     for i in range(2):
         y = random.randrange(300, height - 100)
         BoardsDown(i, y, boards_down)
@@ -183,7 +193,16 @@ def game_cycle():
 
 
 def finish_screen():
-    intro_text = ["Конец", f"Счёт: {k_boards}", f"Рекорд: {0}"]
+    global record, k_boards
+
+    if record < k_boards:
+        file = open("data/record.txt", "w")
+        file.write(str(k_boards))
+
+    file = open("data/record.txt", "r")
+    record = int(file.read())
+
+    intro_text = ["Конец", f"Счёт: {k_boards}", f"Рекорд: {record}"]
 
     fon = pygame.transform.scale(load_image('город2.webp'), size)
     screen.blit(fon, (0, 0))
