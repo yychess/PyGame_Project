@@ -4,30 +4,33 @@ import os
 import sys
 
 
-FPS = 30
-v_up = -60
-v_down = 20
-level = 2
-k_boards = 0
-clash = False
 pygame.init()
-size = width, height = 1000, 700
+FPS = 30
+v_up = -60  # скорость поднятия наверх (по нажатию пробела)
+v_down = 20  # скорость снижения вниз
+level = 2  # начальный уровень скорости
+k_boards = 0  # количество пройденных припятствий
+clash = False  # флаг окончания игры
+size = width, height = 1000, 700  # размеры окна
 screen = pygame.display.set_mode(size)
 clock = pygame.time.Clock()
-record = 0
+record = 0  # рекорд
 
 
+# выход из программы
 def terminate():
     pygame.quit()
     sys.exit()
 
 
+# загрузка изображений
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
     if not os.path.isfile(fullname):
         print(f"Файл с изображением '{fullname}' не найден")
         terminate()
     image = pygame.image.load(fullname)
+    # удаление фона изображения
     if colorkey is not None:
         image = image.convert()
         if colorkey == -1:
@@ -38,6 +41,7 @@ def load_image(name, colorkey=None):
     return image
 
 
+# начальный экран
 def start_screen():
     intro_text = ["Правила:",
                   "цель игры - пройти как можно дальше, не столкнувшись с препятствием",
@@ -45,9 +49,11 @@ def start_screen():
                   "преждевременный выход - esc", "",
                   "нажмите Enter для старта"]
 
+    # установка фона
     fon = pygame.transform.scale(load_image('город.webp'), size)
     screen.blit(fon, (0, 0))
 
+    # обработка текста
     font = pygame.font.Font(None, 30)
     text_coord = 20
     for line in intro_text:
@@ -63,30 +69,72 @@ def start_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT or \
                     (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                # выход из программы по нажатию на крестик или escape
                 terminate()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+                # переход от начального экрана к игре
                 return
         pygame.display.flip()
 
 
-def sprite_helicopter():
-    sprite = pygame.sprite.Sprite()
-    sprite.image = load_image("4.jpg", -1)
-    sprite.image = pygame.transform.scale(sprite.image, (200, 100))
-    sprite.rect = sprite.image.get_rect()
-    sprite.rect.x = 50
-    sprite.rect.y = height // 2 - 100
-    sprite.mask = pygame.mask.from_surface(sprite.image)
-    return sprite
+# класс фоновых облачков
+class Clouds(pygame.sprite.Sprite):
+    image = load_image("cloud.png")
+    image = pygame.transform.scale(image, (200, 120))
+
+    def __init__(self, *group):
+        super().__init__(*group)
+        self.image = Clouds.image
+        self.rect = self.image.get_rect()
+        # рандомное расположение облаков на экране
+        self.rect.x = random.randrange(width)
+        self.rect.y = random.randrange(height)
+
+    # движение облаков
+    def update(self):
+        if self.rect.x > -200:
+            self.rect.x -= level - 1
+        else:
+            # если заходят за экран, то располагаются рандомно на другом конце экрана
+            self.rect.x = width
+            self.rect.y = random.randrange(height)
 
 
+# создание анимированного спрайта вертолета
+class AnimatedSprite(pygame.sprite.Sprite):
+    def __init__(self, sheet, columns, rows):
+        super().__init__()
+        self.frames = []
+        self.cut_sheet(sheet, columns, rows)
+        self.image_number = 0
+        self.image = self.frames[self.image_number]
+        self.rect = self.rect.move(100, 100)
+
+    # разрез изображения на отдельные картинки для анимации
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
+
+    # переход на следующее изобраджение
+    def update(self):
+        self.image_number = (self.image_number + 1) % len(self.frames)
+        self.image = self.frames[self.image_number]
+
+
+# изменение флага произошедшего взрыва
 def boom():
     global clash
     clash = True
 
 
+# родительский класс стенок
 class Boards(pygame.sprite.Sprite):
-    image = load_image("стена.jpg")
+    image = load_image("стена.png")
     image = pygame.transform.scale(image, (100, height))
 
     def __init__(self, x, y, *group):
@@ -98,35 +146,41 @@ class Boards(pygame.sprite.Sprite):
         self.rect.y = y
 
 
+# класс нижних стенок
 class BoardsDown(Boards):
     def __init__(self, x, y, *group):
         super().__init__(x, y, *group)
 
+    # движение стенок, счётчик и ускорение
     def update(self, y, sprite):
         global k_boards, level
         if self.rect.x > -150:
             self.rect.x -= level
         else:
+            # после ухода за экран, переход на другую сторону
             self.rect.x = width
             self.rect.y = y
-            k_boards += 1
+            k_boards += 1  # добовление к счётчику прохождения стенок
+            # каждые 5 пройденных стенок - ускорение
             if k_boards % 5 == 0:
                 level += 1
 
+        #  проверка на столкновение
         if pygame.sprite.collide_mask(self, sprite):
             boom()
 
 
+# класс верхних стенок
 class BoardsUp(Boards):
-
     def __init__(self, x, y, *group):
         super().__init__(x, y, *group)
 
+    # движение стенок
     def update(self, y, sprite):
-        global clash
         if self.rect.x > -150:
             self.rect.x -= level
         else:
+            # после ухода за экран, переход на другую сторону
             self.rect.x = width
             self.rect.y = y
 
@@ -134,19 +188,91 @@ class BoardsUp(Boards):
             boom()
 
 
+# главный игровой класс
 def game_cycle():
-    global v_down, record
+    global v_down
 
-    sprite = sprite_helicopter()
-    font = pygame.font.Font(None, 50)
+    # создание спрайта вертолёта
+    helicopter_image = load_image("helicopter.png")
+    helicopter_image = pygame.transform.scale(helicopter_image, (200, 400))
+    helicopter = AnimatedSprite(helicopter_image, 1, 4)
+
+    font = pygame.font.Font(None, 50)  # для показа количества пройденных стенок
+
+    # второй экран
     screen2 = pygame.Surface(size)
     fon = pygame.transform.scale(load_image('небо'), size)
     screen2.blit(fon, (0, 0))
+
+    # таймер для обновления
     time = pygame.USEREVENT + 1
     pygame.time.set_timer(time, 10)
-    boards_down = pygame.sprite.Group()
-    boards_up = pygame.sprite.Group()
 
+    # создание спрайтов облачков
+    clouds = pygame.sprite.Group()
+    for _ in range(5):
+        Clouds(clouds)
+
+    # создание спрайтов стенок
+    boards_up, boards_down = pygame.sprite.Group(), pygame.sprite.Group()
+    for i in range(2):
+        y = random.randrange(-1 * height, -200)
+        BoardsUp(i, y, boards_up)
+        BoardsDown(i, y + 250 + height, boards_down)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or \
+                    (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                # выход из программы по нажатию на крестик или escape
+                terminate()
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                # поднятие вертолёта по пробелу
+                helicopter.rect = helicopter.rect.move(0, v_up)
+                v_down = 20
+
+            if event.type == time:
+                # проигрыш (врезание в стенки, выход за экран) - взрыв
+                if clash or -100 > helicopter.rect.y or helicopter.rect.y > height:
+                    boom_image = pygame.transform.scale(load_image('взрыв.png'), (400, 400))
+                    screen.blit(boom_image, (helicopter.rect.x - 100, helicopter.rect.y - 150))
+                    pygame.display.flip()
+                    pygame.time.wait(1500)
+                    return
+
+                helicopter.rect = helicopter.rect.move(0, v_down / 20)  # снижение вертолета
+                v_down += 1  # для снижения по параболе
+
+                # обновление вертолета и облаков
+                clouds.update()
+                helicopter.update()
+
+                # обновление стенок
+                y = random.randrange(-1 * height, -200)
+                boards_up.update(y, helicopter)
+                boards_down.update(y + 250 + height, helicopter)
+
+            # отрисовка облаков, вертолёта и стенок
+            clouds.draw(screen2)
+            screen2.blit(helicopter.image, helicopter.rect)
+            boards_up.draw(screen2)
+            boards_down.draw(screen2)
+
+            # добавление счётчика на экран
+            text = font.render(str(k_boards), True, (0, 255, 0))
+            screen2.blit(text, (10, 10))
+
+            # смена экранок
+            screen.blit(screen2, (0, 0))
+            screen2.blit(fon, (0, 0))
+            pygame.display.flip()
+
+
+# экран завершения
+def finish_screen():
+    global record, k_boards
+
+    # проверка на уже сохранённый рекорд
     try:
         file = open("data/record.txt", "r")
         record = int(file.read())
@@ -154,62 +280,22 @@ def game_cycle():
     except FileNotFoundError:
         record = 0
 
-    for i in range(2):
-        y = random.randrange(300, height - 100)
-        BoardsDown(i, y, boards_down)
-        BoardsUp(i, y - 950, boards_up)
-
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT or \
-                    (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-                pygame.time.set_timer(time, 0)
-                terminate()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                sprite.rect = sprite.rect.move(0, v_up)
-                v_down = 20
-
-            if event.type == time:
-                y = random.randrange(300,  height - 100)
-                boards_down.update(y, sprite)
-                boards_up.update(y - 950, sprite)
-                if clash or -100 > sprite.rect.y or sprite.rect.y > height:
-                    boom_image = pygame.transform.scale(load_image('взрыв.png'), (400, 400))
-                    screen.blit(boom_image, (sprite.rect.x - 100, sprite.rect.y - 150))
-                    pygame.display.flip()
-                    pygame.time.wait(1500)
-                    return
-                sprite.rect = sprite.rect.move(0, v_down / 20)
-                v_down += 1
-            screen2.blit(sprite.image, sprite.rect)
-            boards_down.draw(screen2)
-            boards_up.draw(screen2)
-            text = font.render(str(k_boards), True, (0, 255, 0))
-            screen2.blit(text, (10, 10))
-            screen.blit(screen2, (0, 0))
-            screen2.blit(fon, (0, 0))
-
-            pygame.display.flip()
-
-
-def finish_screen():
-    global record, k_boards
-
+    # обнавление рекрда при необходимости
     if record < k_boards:
         file = open("data/record.txt", "w")
-        file.write(str(k_boards))
+        record = str(k_boards)
+        file.write(record)
 
-    file = open("data/record.txt", "r")
-    record = int(file.read())
-
-    intro_text = ["Конец", f"Счёт: {k_boards}", f"Рекорд: {record}"]
-
+    # фон
     fon = pygame.transform.scale(load_image('город2.webp'), size)
     screen.blit(fon, (0, 0))
 
+    # обработка текста с указанием счёта и рекорда
+    text = ["Конец", f"Счёт: {k_boards}", f"Рекорд: {record}"]
+
     font = pygame.font.Font(None, 30)
     text_coord = 20
-    for line in intro_text:
+    for line in text:
         string_rendered = font.render(line, True, pygame.Color('black'))
         intro_rect = string_rendered.get_rect()
         text_coord += 10
@@ -222,9 +308,9 @@ def finish_screen():
         for event in pygame.event.get():
             if event.type == pygame.QUIT or \
                     (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+                # выход из программы по нажатию на крестик или escape
                 terminate()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
-                return
+
         pygame.display.flip()
 
 
