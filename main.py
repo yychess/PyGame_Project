@@ -321,4 +321,3 @@ if __name__ == '__main__':
     start_screen()
     game_cycle()
     finish_screen()
-
